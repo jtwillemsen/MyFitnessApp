@@ -1,0 +1,20 @@
+{
+  "name": "Workout Tracker PWA",
+  "short_name": "Workout",
+  "description": "Compacte offline workout tracker voor persoonlijk gebruik.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "lang": "nl-NL",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

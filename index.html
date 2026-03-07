@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Workout Tracker PWA</title>
+  <meta name="description" content="Compacte mobile-first workout tracker die offline werkt." />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Workout" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card: #fff;
+      --text: #101828;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --accent: #2563eb;
+      --ok: #16a34a;
+      --danger: #dc2626;
+      --touch: 46px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --line: #263140;
+        --accent: #60a5fa;
+        --ok: #4ade80;
+        --danger: #f87171;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: env(safe-area-inset-top) 0 calc(82px + env(safe-area-inset-bottom));
+    }
+    .app { max-width: 620px; margin: 0 auto; padding: 12px; }
+    .top {
+      position: sticky; top: 0; z-index: 5;
+      background: color-mix(in srgb, var(--bg), transparent 12%);
+      backdrop-filter: blur(10px);
+      padding: 8px 0 12px;
+    }
+    .title { margin: 0 0 8px; font-size: 1.2rem; }
+    .row, .split { display: flex; gap: 8px; align-items: center; }
+    .split { justify-content: space-between; }
+    .grow { flex: 1; min-width: 0; }
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 10px; margin-bottom: 10px;
+      box-shadow: 0 2px 14px rgba(2, 6, 23, .04);
+    }
+    .small { color: var(--muted); font-size: .85rem; }
+    button, input, select, textarea {
+      font: inherit; color: inherit;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--card), var(--bg) 12%);
+      border-radius: 12px; min-height: var(--touch);
+      padding: 0 12px;
+    }
+    button { font-weight: 600; }
+    button:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
+    .btn-ok { background: var(--ok); color: #fff; border-color: transparent; }
+    .btn-danger { background: var(--danger); color: #fff; border-color: transparent; }
+    .day-chip {
+      min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap;
+    }
+    .day-chip.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .scroller { display: flex; gap: 8px; overflow: auto; padding-bottom: 3px; }
+    .exercise-name { font-size: 1rem; margin: 0; }
+    .grid { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); }
+    .grid label, .field { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); }
+    input[type="number"], input[type="text"] { width: 100%; }
+    textarea { width: 100%; min-height: 76px; padding-top: 10px; }
+    .done {
+      min-width: var(--touch); height: var(--touch); border-radius: 999px; font-size: 1.1rem;
+      display: inline-grid; place-items: center;
+    }
+    .done.active { background: var(--ok); color: #fff; border-color: transparent; }
+    .tabs {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--card), transparent 10%);
+      backdrop-filter: blur(8px);
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    }
+    .tabs .row { max-width: 620px; margin: 0 auto; }
+    .tab { flex: 1; min-height: 44px; border-radius: 10px; }
+    .tab.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .inline-form { display: flex; gap: 8px; }
+    .inline-form > input { flex: 1; }
+    details { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+    details > summary { cursor: pointer; color: var(--muted); }
+    .hide { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <h1 class="title">Workout Tracker</h1>
+      <div id="dayScroller" class="scroller"></div>
+    </section>
+
+    <section id="viewWorkout"></section>
+    <section id="viewHistory" class="hide"></section>
+    <section id="viewProgress" class="hide"></section>
+    <section id="viewSettings" class="hide"></section>
+  </main>
+
+  <nav class="tabs">
+    <div class="row">
+      <button class="tab active" data-view="workout">Workout</button>
+      <button class="tab" data-view="history">Historie</button>
+      <button class="tab" data-view="progress">Progressie</button>
+      <button class="tab" data-view="settings">Instellingen</button>
+    </div>
+  </nav>
+
+  <script>
+    // Lokale keys voor opslag
+    const STORAGE_KEY = 'workout.pwa.v1';
+    const THEME_VERSION = 1;
+
+    // Startdata, zodat de app direct testbaar is.
+    const seed = {
+      version: THEME_VERSION,
+      selectedDayId: 'd-push',
+      days: [
+        { id: 'd-push', name: 'Push', exercises: [
+          { id: 'e-bench', name: 'Bench Press' },
+          { id: 'e-press', name: 'Shoulder Press' },
+          { id: 'e-tricep', name: 'Tricep Pushdown' }
+        ]},
+        { id: 'd-pull', name: 'Pull', exercises: [
+          { id: 'e-row', name: 'Barbell Row' },
+          { id: 'e-pullup', name: 'Pull-up' },
+          { id: 'e-curl', name: 'Bicep Curl' }
+        ]},
+        { id: 'd-legs', name: 'Legs', exercises: [
+          { id: 'e-squat', name: 'Squat' },
+          { id: 'e-rdl', name: 'Romanian Deadlift' },
+          { id: 'e-calf', name: 'Calf Raise' }
+        ]}
+      ],
+      drafts: {},
+      logs: [
+        {
+          id: crypto.randomUUID(),
+          dayId: 'd-push',
+          date: new Date(Date.now() - 86400000).toISOString(),
+          entries: [
+            { exerciseId: 'e-bench', completed: true, sets: 4, reps: 8, weight: 72.5, notes: '' },
+            { exerciseId: 'e-press', completed: true, sets: 3, reps: 10, weight: 42.5, notes: '' },
+            { exerciseId: 'e-tricep', completed: true, sets: 3, reps: 12, weight: 25, notes: 'strak tempo' }
+          ]
+        }
+      ]
+    };
+
+    const uid = () => crypto.randomUUID();
+    const byId = (id) => document.getElementById(id);
+    const round = (n) => Number.isFinite(+n) ? +(+n).toFixed(2) : '';
+
+    const load = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (parsed && parsed.version === THEME_VERSION) return parsed;
+      } catch (_) {}
+      return structuredClone(seed);
+    };
+    let state = load();
+
+    const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const getDay = (id = state.selectedDayId) => state.days.find(d => d.id === id);
+    const ensureDraft = (dayId) => (state.drafts[dayId] ||= {});
+    const getDraftEntry = (dayId, exId) => (ensureDraft(dayId)[exId] ||= { completed: false, sets: '', reps: '', weight: '', notes: '' });
+
+    const latestForExercise = (exerciseId) => {
+      for (const log of [...state.logs].sort((a, b) => +new Date(b.date) - +new Date(a.date))) {
+        const found = log.entries.find(e => e.exerciseId === exerciseId && (e.completed || e.sets || e.reps || e.weight || e.notes));
+        if (found) return { ...found, date: log.date };
+      }
+      return null;
+    };
+
+    const trendForExercise = (exerciseId) => {
+      const all = state.logs
+        .flatMap(log => log.entries.filter(e => e.exerciseId === exerciseId).map(e => ({ ...e, date: log.date })))
+        .filter(e => e.weight || e.reps || e.sets)
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date));
+      return { latest: all[0], previous: all[1], count: all.length };
+    };
+
+    function renderDays() {
+      const host = byId('dayScroller');
+      host.innerHTML = '';
+      state.days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.className = 'day-chip' + (day.id === state.selectedDayId ? ' active' : '');
+        btn.textContent = day.name;
+        btn.onclick = () => {
+          state.selectedDayId = day.id;
+          save();
+          renderAll();
+        };
+        host.appendChild(btn);
+      });
+      const add = document.createElement('button');
+      add.className = 'day-chip';
+      add.textContent = '+ Dag';
+      add.onclick = addDay;
+      host.appendChild(add);
+    }
+
+    function renderWorkout() {
+      const day = getDay();
+      const host = byId('viewWorkout');
+      if (!day) {
+        host.innerHTML = '<div class="card">Geen trainingsdag gevonden.</div>';
+        return;
+      }
+      host.innerHTML = `
+        <div class="card split">
+          <div>
+            <strong>${day.name}</strong>
+            <div class="small">Tik op ✓, vul sets/reps/gewicht en sla op.</div>
+          </div>
+          <div class="row">
+            <button id="editDayBtn">Hernoem</button>
+            <button id="resetDayBtn" class="btn-danger">Reset</button>
+          </div>
+        </div>
+        <div id="exerciseList"></div>
+        <div class="card row">
+          <button id="addExerciseBtn">+ Oefening</button>
+          <button id="saveWorkoutBtn" class="btn-primary grow">Sessie opslaan</button>
+        </div>`;
+
+      byId('editDayBtn').onclick = () => renameDay(day.id);
+      byId('resetDayBtn').onclick = () => resetDay(day.id);
+      byId('addExerciseBtn').onclick = () => addExercise(day.id);
+      byId('saveWorkoutBtn').onclick = () => saveWorkout(day.id);
+
+      const list = byId('exerciseList');
+      day.exercises.forEach(ex => {
+        const prev = latestForExercise(ex.id);
+        const draft = getDraftEntry(day.id, ex.id);
+        const item = document.createElement('article');
+        item.className = 'card';
+        item.innerHTML = `
+          <div class="split">
+            <h3 class="exercise-name">${ex.name}</h3>
+            <div class="row">
+              <button class="done ${draft.completed ? 'active' : ''}" data-action="done">✓</button>
+              <button data-action="edit">✎</button>
+              <button data-action="delete" class="btn-danger">🗑</button>
+            </div>
+          </div>
+          <div class="small">Vorige: ${prev ? `${prev.sets || '-'} sets · ${prev.reps || '-'} reps · ${prev.weight || '-'} kg · ${new Date(prev.date).toLocaleDateString('nl-NL')}` : 'nog geen data'}</div>
+          <div class="grid" style="margin-top:8px">
+            <label>Sets<input inputmode="numeric" type="number" min="0" step="1" value="${draft.sets}"></label>
+            <label>Reps<input inputmode="numeric" type="number" min="0" step="1" value="${draft.reps}"></label>
+            <label>Gewicht<input inputmode="decimal" type="number" min="0" step="0.5" value="${draft.weight}"></label>
+          </div>
+          <label class="field" style="margin-top:8px">Notities<textarea placeholder="Optioneel">${draft.notes || ''}</textarea></label>
+        `;
+
+        const [setsEl, repsEl, weightEl] = item.querySelectorAll('input');
+        const notesEl = item.querySelector('textarea');
+        const patchDraft = () => {
+          Object.assign(draft, {
+            sets: setsEl.value === '' ? '' : round(setsEl.value),
+            reps: repsEl.value === '' ? '' : round(repsEl.value),
+            weight: weightEl.value === '' ? '' : round(weightEl.value),
+            notes: notesEl.value.trim()
+          });
+          save();
+        };
+        [setsEl, repsEl, weightEl, notesEl].forEach(el => el.addEventListener('input', patchDraft));
+
+        item.querySelector('[data-action="done"]').onclick = (e) => {
+          draft.completed = !draft.completed;
+          e.currentTarget.classList.toggle('active', draft.completed);
+          save();
+        };
+        item.querySelector('[data-action="edit"]').onclick = () => editExercise(day.id, ex.id);
+        item.querySelector('[data-action="delete"]').onclick = () => deleteExercise(day.id, ex.id);
+
+        list.appendChild(item);
+      });
+    }
+
+    function renderHistory() {
+      const host = byId('viewHistory');
+      const logs = [...state.logs].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+      host.innerHTML = `<div class="card"><strong>Historie (${logs.length})</strong><div class="small">Alle opgeslagen sessies.</div></div>`;
+      logs.forEach(log => {
+        const day = state.days.find(d => d.id === log.dayId)?.name || 'Onbekende dag';
+        const box = document.createElement('article');
+        box.className = 'card';
+        box.innerHTML = `<div class="split"><strong>${day}</strong><span class="small">${new Date(log.date).toLocaleString('nl-NL')}</span></div>` +
+          log.entries.map(e => {
+            const exName = state.days.flatMap(d => d.exercises).find(x => x.id === e.exerciseId)?.name || 'Oefening';
+            return `<div class="small" style="margin-top:6px">• ${exName}: ${e.sets || '-'}x${e.reps || '-'} @ ${e.weight || '-'}kg ${e.completed ? '✓' : ''}${e.notes ? ` (${e.notes})` : ''}</div>`;
+          }).join('');
+        host.appendChild(box);
+      });
+    }
+
+    function renderProgress() {
+      const host = byId('viewProgress');
+      const allExercises = state.days.flatMap(d => d.exercises);
+      host.innerHTML = `<div class="card"><strong>Progressie per oefening</strong><div class="small">Laatste vs vorige prestatie.</div></div>`;
+      allExercises.forEach(ex => {
+        const t = trendForExercise(ex.id);
+        if (!t.latest) return;
+        const delta = (t.latest.weight && t.previous?.weight) ? round(t.latest.weight - t.previous.weight) : null;
+        const dir = delta === null ? '' : (delta > 0 ? `(+${delta}kg)` : delta < 0 ? `(${delta}kg)` : '(=)');
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="split"><strong>${ex.name}</strong><span class="small">${t.count} logs</span></div>
+          <div class="small" style="margin-top:6px">Laatste: ${t.latest.sets || '-'}x${t.latest.reps || '-'} @ ${t.latest.weight || '-'}kg ${dir}</div>
+          <div class="small">Datum: ${new Date(t.latest.date).toLocaleDateString('nl-NL')}</div>
+        `;
+        host.appendChild(card);
+      });
+    }
+
+    function renderSettings() {
+      const host = byId('viewSettings');
+      host.innerHTML = `
+        <div class="card">
+          <strong>Data beheer</strong>
+          <div class="small">Exporteer/importeer alle data als JSON.</div>
+          <div class="row" style="margin-top:10px">
+            <button id="exportBtn" class="btn-ok">Export JSON</button>
+            <button id="importBtn">Import JSON</button>
+            <input id="importFile" type="file" accept="application/json" class="hide" />
+          </div>
+          <details>
+            <summary>Gevaarzone</summary>
+            <button id="wipeBtn" class="btn-danger" style="margin-top:8px">Alles wissen</button>
+          </details>
+        </div>`;
+
+      byId('exportBtn').onclick = () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workout-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      byId('importBtn').onclick = () => byId('importFile').click();
+      byId('importFile').onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const imported = JSON.parse(await file.text());
+          if (!imported.days || !imported.logs) throw new Error('Ongeldige structuur');
+          state = { ...seed, ...imported, version: THEME_VERSION };
+          save();
+          renderAll();
+          alert('Import geslaagd');
+        } catch (err) {
+          alert('Import mislukt: ' + err.message);
+        }
+        e.target.value = '';
+      };
+      byId('wipeBtn').onclick = () => {
+        if (!confirm('Alles verwijderen?')) return;
+        state = structuredClone(seed);
+        save();
+        renderAll();
+      };
+    }
+
+    function saveWorkout(dayId) {
+      const dayDraft = ensureDraft(dayId);
+      const entries = Object.entries(dayDraft)
+        .map(([exerciseId, e]) => ({
+          exerciseId,
+          completed: !!e.completed,
+          sets: e.sets === '' ? '' : round(e.sets),
+          reps: e.reps === '' ? '' : round(e.reps),
+          weight: e.weight === '' ? '' : round(e.weight),
+          notes: (e.notes || '').trim()
+        }))
+        .filter(e => e.completed || e.sets !== '' || e.reps !== '' || e.weight !== '' || e.notes);
+
+      if (!entries.length) return alert('Geen ingevulde data om op te slaan.');
+      state.logs.push({ id: uid(), dayId, date: new Date().toISOString(), entries });
+
+      // Na opslaan: velden leegmaken voor snelle nieuwe sessie.
+      Object.keys(dayDraft).forEach(k => dayDraft[k] = { completed: false, sets: '', reps: '', weight: '', notes: '' });
+      save();
+      renderAll();
+      alert('Sessie opgeslagen');
+    }
+
+    function addDay() {
+      const name = prompt('Naam van trainingsdag? (bijv. Upper)')?.trim();
+      if (!name) return;
+      const id = 'd-' + uid().slice(0, 8);
+      state.days.push({ id, name, exercises: [] });
+      state.selectedDayId = id;
+      save();
+      renderAll();
+    }
+    function renameDay(dayId) {
+      const day = getDay(dayId);
+      const next = prompt('Nieuwe naam voor trainingsdag:', day.name)?.trim();
+      if (!next) return;
+      day.name = next;
+      save();
+      renderAll();
+    }
+    function resetDay(dayId) {
+      if (!confirm('Alle invoer voor deze dag resetten?')) return;
+      state.drafts[dayId] = {};
+      save();
+      renderAll();
+    }
+
+    function addExercise(dayId) {
+      const name = prompt('Naam van oefening?')?.trim();
+      if (!name) return;
+      getDay(dayId).exercises.push({ id: 'e-' + uid().slice(0, 8), name });
+      save();
+      renderAll();
+    }
+    function editExercise(dayId, exId) {
+      const ex = getDay(dayId).exercises.find(e => e.id === exId);
+      const next = prompt('Nieuwe oefening naam:', ex.name)?.trim();
+      if (!next) return;
+      ex.name = next;
+      save();
+      renderAll();
+    }
+    function deleteExercise(dayId, exId) {
+      if (!confirm('Oefening verwijderen?')) return;
+      const day = getDay(dayId);
+      day.exercises = day.exercises.filter(e => e.id !== exId);
+      delete ensureDraft(dayId)[exId];
+      state.logs.forEach(log => log.entries = log.entries.filter(e => e.exerciseId !== exId));
+      save();
+      renderAll();
+    }
+
+    function renderTabs() {
+      document.querySelectorAll('.tab').forEach(btn => {
+        btn.onclick = () => {
+          const view = btn.dataset.view;
+          document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === btn));
+          byId('viewWorkout').classList.toggle('hide', view !== 'workout');
+          byId('viewHistory').classList.toggle('hide', view !== 'history');
+          byId('viewProgress').classList.toggle('hide', view !== 'progress');
+          byId('viewSettings').classList.toggle('hide', view !== 'settings');
+        };
+      });
+    }
+
+    function renderAll() {
+      renderDays();
+      renderWorkout();
+      renderHistory();
+      renderProgress();
+      renderSettings();
+    }
+
+    renderTabs();
+    renderAll();
+
+    // Service worker registratie voor offline gebruik.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.warn));
+    }
+  </script>
+</body>
+</html>
