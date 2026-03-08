@@ -130,42 +130,24 @@
   <script>
     // Lokale keys voor opslag
     const STORAGE_KEY = 'workout.pwa.v1';
-    const THEME_VERSION = 1;
+    const THEME_VERSION = 2;
 
     // Startdata, zodat de app direct testbaar is.
+    const makeExercise = (name) => ({ id: `e-${name}`, name: name.replaceAll('_', ' ').replace(/\b\w/g, (m) => m.toUpperCase()) });
+
     const seed = {
       version: THEME_VERSION,
-      selectedDayId: 'd-push',
+      selectedDayId: 'd-chest',
       days: [
-        { id: 'd-push', name: 'Push', exercises: [
-          { id: 'e-bench', name: 'Bench Press' },
-          { id: 'e-press', name: 'Shoulder Press' },
-          { id: 'e-tricep', name: 'Tricep Pushdown' }
-        ]},
-        { id: 'd-pull', name: 'Pull', exercises: [
-          { id: 'e-row', name: 'Barbell Row' },
-          { id: 'e-pullup', name: 'Pull-up' },
-          { id: 'e-curl', name: 'Bicep Curl' }
-        ]},
-        { id: 'd-legs', name: 'Legs', exercises: [
-          { id: 'e-squat', name: 'Squat' },
-          { id: 'e-rdl', name: 'Romanian Deadlift' },
-          { id: 'e-calf', name: 'Calf Raise' }
-        ]}
+        { id: 'd-chest', name: 'Chest', exercises: ['bench_press', 'incline_press', 'chest_fly', 'hammer_press'].map(makeExercise) },
+        { id: 'd-shoulders', name: 'Shoulders', exercises: ['shoulder_press', 'shrug', 'lateral_raise', 'front_raise'].map(makeExercise) },
+        { id: 'd-arms', name: 'Arms', exercises: ['bicep_curl', 'hammer_curl', 'tricep_kickback', 'overhead_tricep_extension'].map(makeExercise) },
+        { id: 'd-back', name: 'Back', exercises: ['reverse_fly', 'single_arm_row', 'bent_over_row', 'deadlift'].map(makeExercise) },
+        { id: 'd-legs', name: 'Legs', exercises: ['squat', 'sumo_squat', 'goblet_squat', 'lunge', 'step_up', 'calf_raise', 'romanian_deadlift', 'hip_raise'].map(makeExercise) },
+        { id: 'd-core', name: 'Core', exercises: ['russian_twist', 'side_bend', 'wood_chopper', 'v_up'].map(makeExercise) }
       ],
       drafts: {},
-      logs: [
-        {
-          id: crypto.randomUUID(),
-          dayId: 'd-push',
-          date: new Date(Date.now() - 86400000).toISOString(),
-          entries: [
-            { exerciseId: 'e-bench', completed: true, sets: 4, reps: 8, weight: 72.5, notes: '' },
-            { exerciseId: 'e-press', completed: true, sets: 3, reps: 10, weight: 42.5, notes: '' },
-            { exerciseId: 'e-tricep', completed: true, sets: 3, reps: 12, weight: 25, notes: 'strak tempo' }
-          ]
-        }
-      ]
+      logs: []
     };
 
     const uid = () => crypto.randomUUID();
